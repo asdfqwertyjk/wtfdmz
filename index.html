@@ -139,6 +139,8 @@ body.touch #newCheat{bottom:calc(200px + env(safe-area-inset-bottom,0px)); font-
 #awayTag{position:absolute;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);background:rgba(20,8,8,.86);border:1px solid var(--yel);color:var(--yel);font-family:'Black Ops One',Impact,sans-serif;font-size:17px;letter-spacing:1px;padding:7px 14px;white-space:nowrap;display:none;z-index:5;text-align:center}
 #awayTag small{display:block;color:var(--dim);font-family:'VT323',monospace;font-size:16px;letter-spacing:0;margin-top:2px}
 body.away #awayTag{display:block}
+body[data-away="bath"] #awayTag{display:none !important}
+body.away #mouseHint{display:none !important}
 /* away from the desk: povImg swaps to the empty-chair photo (POV_AWAY_B64); a touch of dim so the swap reads */
 #povImg{transition:filter .6s}
 body.away #povImg{filter:brightness(.8)}
@@ -631,7 +633,7 @@ Contact your system administrator (your mom) for further assistance.</div>
 <div id="menu" class="overlay">
   <h1 class="title">MODERN WALLFARE 2</h1>
   <div class="subtitle">DMZ</div>
-  <div class="ver">v5.8 · <span id="btnOpts" class="lnk">⚙ settings</span></div>
+  <div class="ver">v5.9 · <span id="btnOpts" class="lnk">⚙ settings</span></div>
   <div class="modes">
     <div class="modecard">
       <div class="mh">📡 CURRENT STATE OF THE GAME <span class="mdate" id="liveDate"></span></div>
@@ -2167,7 +2169,7 @@ function say(who,col,s){ return `<b style="color:${col}">${who}:</b> ${esc(s)}`;
 /* ---- the reboot: every failed event ends here ---- */
 function rebootPC(reason,line){
   if(st.rebooting)return; st.rebooting=true; unlock("reboot");
-  if(life.ph)phoneHide();
+  if(life.ph)phoneHide(); if(st.away||bath.on)awayClear();
   ksReset(); evacReset(); nadeReset(); st.injected=false; st.injectArmed=false; stopAllAudio(); if(S.bsod)S.bsod();
   if(st.ingame){ st.playing=false; st.firing=false; }
   $("bsodWhy").textContent=reason||"something happened in the real world.";
@@ -2183,16 +2185,21 @@ function rebootPC(reason,line){
 }
 function awayStart(kind,secs,label,sub){
   st.away={kind,t:secs,total:secs,label,sub,tagT:0};
-  document.body.classList.add("away"); document.exitPointerLock&&document.exitPointerLock();
+  document.body.classList.add("away"); document.body.dataset.away=kind; document.exitPointerLock&&document.exitPointerLock();
   if(POV_AWAY_B64)setPov(POV_AWAY_B64);
   st.firing=false; st.playing=walkOn()&&st.ingame&&!st.banned&&!overlayUp();
   awayTag(); updHUD();
 }
 function awayTag(){ const a=st.away; if(!a)return; const m=Math.floor(a.t/60), s=Math.floor(Math.max(0,a.t)%60);
   $("awayTag").innerHTML=`${a.label} · ${m}:${String(s).padStart(2,"0")}<small>${walkOn()&&st.ingame?"PATHING BOT COVERING — the match continues without you":a.sub}</small>`; }
+function awayClear(){ /* drop the away state without running its ending (reboot / failed minigame) */
+  st.away=null; document.body.classList.remove("away"); delete document.body.dataset.away;
+  if(bath.on||!$("poop").classList.contains("hidden")){ bath.on=false; $("poop").classList.add("hidden"); $("poopQ").classList.add("hidden"); }
+  if(povImg.src!==POV_B64)setPov(POV_B64);
+}
 function awayEnd(){
   const a=st.away; if(!a)return; st.away=null;
-  document.body.classList.remove("away");
+  document.body.classList.remove("away"); delete document.body.dataset.away;
   if(povImg.src!==POV_B64)setPov(POV_B64);
   if(a.kind==="mom")momVisitEnd(); else if(a.kind==="shift")shiftEnd(); else if(a.kind==="bath")toast("🚽 back at the desk.","streak",2400);
   updHUD();
@@ -2311,8 +2318,8 @@ function bathStart(){ if(bath.on||st.away||st.rebooting||life.cueing)return; lif
 function bathStartNow(){
   if(bath.on||st.away||st.rebooting)return; if(life.ph)phoneHide();
   Object.assign(bath,{on:true,p:.5,v:0,zone:rand(.3,.7),zdir:1,prog:0,t:0,hold:false,wash:false,limit:24});
-  awayStart("bath",999,"🚽 POOPIES","the game is running. you are not at the desk. hold [SPACE] to push, release to relax. stay in the zone. 24 seconds.");
-  $("poop").classList.remove("hidden"); $("poopSub").textContent="it's time. you knew it was time.";
+  awayStart("bath",999,"🚽 POOPIES","");
+  $("poop").classList.remove("hidden"); $("poopSub").textContent=TOUCH?"hold the button to push, let go to relax. stay in the zone.":"hold [SPACE] to push, release to relax. stay in the zone.";
   toast("🚽 <b>IT'S TIME.</b>","warn",3600);
 }
 function bathTick(dt){
@@ -2324,7 +2331,7 @@ function bathTick(dt){
     $("poopNeedle").style.bottom=(bath.p*100)+"%"; $("poopZone").style.bottom=((bath.zone-.11)*100)+"%"; $("poopFill").style.width=Math.min(100,bath.prog/6*100)+"%"; $("poopZone").classList.toggle("in",inZ);
     $("poopT").textContent=(inZ?"in the zone. breathe.":bath.p>bath.zone?"too much. ease off.":"more. commit.")+"  · "+Math.ceil(bath.limit-bath.t)+"s";
     if(bath.prog>=6){ bath.wash=true; $("poopQ").classList.remove("hidden"); $("poopT").textContent="done. wash your hands?  [1] yes   [2] no"; }
-    else if(bath.t>=bath.limit){ bath.on=false; $("poop").classList.add("hidden"); st.away=null; document.body.classList.remove("away"); rebootPC("you were on the toilet for 4 minutes","Windows took the opportunity to update."); }
+    else if(bath.t>=bath.limit){ awayClear(); rebootPC("you were on the toilet for 4 minutes","Windows took the opportunity to update."); }
   }
 }
 function bathEnd(wash){
@@ -3053,7 +3060,7 @@ function resumeAfterLoad(){ if((st.locked||TOUCH)&&!st.banned&&!overlayUp()){ st
 
 /* ============ OPERATOR POV — the game on HIS monitor ============ */
 const povImg=$("povImg"), grimeEl=$("grime");
-function setPov(src){ povImg.src=src; grimeEl.style.background=`url("${src}") no-repeat`; } /* the glass grime is re-projected from the SAME photo, or you get two people in the chair */
+function setPov(src){ povImg.src=src; grimeEl.style.backgroundImage=`url("${src}")`; grimeEl.style.backgroundRepeat="no-repeat"; } /* the glass grime is re-projected from the SAME photo, or you get two people in the chair */
 function solve8(A,b){
   const n=8;
   for(let c=0;c<n;c++){
